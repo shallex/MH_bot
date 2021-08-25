@@ -1,7 +1,6 @@
 import logging
 
 import nest_asyncio
-nest_asyncio.apply()
 
 import aiogram.utils.markdown as md
 from aiogram import Bot, Dispatcher, types
@@ -15,11 +14,11 @@ from aiogram.utils import executor
 import asyncio
 import time
 
+nest_asyncio.apply()
 logging.basicConfig(level=logging.INFO)
 
 API_TOKEN = '1997577729:AAFCu_AWn4b7QQbvHO2l5rWlphjL-V-7NyY'
 PROXY_URL = 'http://proxy.server:3128'
-
 
 user_info = {}
 result = {}
@@ -31,6 +30,7 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 HOST_ID = '540276455'
 
+
 # States
 class Form(StatesGroup):
     relation = State()
@@ -39,8 +39,10 @@ class Form(StatesGroup):
     test = State()
     questions_state = State()
 
+
 class Report(StatesGroup):
     waiting = State()
+
 
 @dp.message_handler(state='*', commands='debug')
 async def debug(message: types.Message):
@@ -51,9 +53,11 @@ async def debug(message: types.Message):
                 break
             text = ''
             for inf in user_info[chat_id]:
-              text = text + str(inf) + ' : ' + str(user_info[chat_id][inf]) + '\n'
+                text = text + str(inf) + ' : ' + str(user_info[chat_id][inf]) + '\n'
             await message.answer(text)
-            #await message.answer("chat id: {}\nname: {}\nusername: {}\ngender: {}\nfullname: {}".format(chat_id, user_info[chat_id]['name'], user_info[chat_id]['username'], user_info[chat_id]['gender'], user_info[chat_id]['fullname']))
+            # await message.answer("chat id: {}\nname: {}\nusername: {}\ngender: {}\nfullname: {}".format(chat_id,
+            # user_info[chat_id]['name'], user_info[chat_id]['username'], user_info[chat_id]['gender'],
+            # user_info[chat_id]['fullname']))
     else:
         await message.answer("Incorrect")
 
@@ -67,11 +71,15 @@ async def cmd_start(message: types.Message):
     # Set state
     await Form.relation.set()
 
-    question = "Привет! Меня зовут ... и я помогу преодолеть тебе психологические проблемы. Чтобы я могла лучше тебе помогать, нам для начала нужно немного познакомиться. Как будет комфортнее на \"ты\" или на \"вы\"?'"
+    question = "Привет! Меня зовут ... и я помогу преодолеть тебе психологические проблемы. Чтобы я могла лучше тебе " \
+               "помогать, нам для начала нужно немного познакомиться. Как будет комфортнее на \"ты\" или на \"вы\"?' "
+    await show_typing(message)
     await message.answer(question, reply_markup=get_keyboard_relation())
+
 
 @dp.message_handler(content_types=['text'])
 async def speak(message: types.Message):
+    await show_typing(message)
     await message.answer("Нажми /start если хочешь узнать себя", reply_markup=types.ReplyKeyboardRemove())
 
 
@@ -91,20 +99,21 @@ async def process_relation(message: types.Message, state: FSMContext):
     user_info[message.chat.id]['id'] = message.from_user.id
     user_info[message.chat.id]['username'] = message.from_user.username
     await Form.next()
+    await show_typing(message)
     if data['relation'] == 'Ты':
-        await message.answer('Как я могу тебя называть?', reply_markup = types.ReplyKeyboardRemove())
+        await message.answer('Как я могу тебя называть?', reply_markup=types.ReplyKeyboardRemove())
     else:
-        await message.answer('Как я могу к вам обращаться?', reply_markup = types.ReplyKeyboardRemove())
+        await message.answer('Как я могу к вам обращаться?', reply_markup=types.ReplyKeyboardRemove())
 
 
 @dp.message_handler(lambda message: message.text not in ["Ты", "Вы"], state=Form.relation)
 async def process_relation_invalid(message: types.Message):
+    await show_typing(message)
     return await message.reply("Ошибка. Выберите вариант ответа, используя кнопки на клавиатуре.")
 
 
 @dp.message_handler(state=Form.name)
 async def process_name(message: types.Message, state: FSMContext):
-    text = ''
     async with state.proxy() as data:
         data['name'] = message.text
         user_info[message.chat.id]['name'] = message.text
@@ -124,6 +133,7 @@ async def process_name(message: types.Message, state: FSMContext):
     markup.add("М", "Ж")
     markup.add("Другой")
 
+    await show_typing(message)
     await message.answer(text, reply_markup=markup)
 
 
@@ -142,9 +152,9 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     await message.reply('Cancelled.', reply_markup=types.ReplyKeyboardRemove())
 
 
-
 @dp.message_handler(lambda message: message.text not in ["М", "Ж", "Другой"], state=Form.gender)
 async def process_gender_invalid(message: types.Message):
+    await show_typing(message)
     return await message.reply("Неправильно выбран пол. Используйте кнопки на клавиатуре.")
 
 
@@ -163,6 +173,8 @@ async def process_gender(message: types.Message, state: FSMContext):
         markup = types.ReplyKeyboardRemove()
         text = 'Нажми /test, когда будешь готов.' if data['relation'] == "Ты" else 'Нажмите /test, когда будете готовы.'
         # And send message
+
+        await show_typing(message, 2)
         await bot.send_message(
             message.chat.id,
             md.text(
@@ -192,7 +204,6 @@ def test_keyboard():
     return markup
 
 
-
 @dp.message_handler(state=Form.test, commands="test")
 @dp.message_handler(Text(equals='test', ignore_case=True), state=Form.test)
 async def start_test(message: types.Message, state: FSMContext):
@@ -202,76 +213,89 @@ async def start_test(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
 
         if data['relation'] == "Ты":
-            text = 'Давай оценим твое эмоциональное состояние. Сейчас я покажу тебе 22 утверждения о чувствах и переживаниях, связанных с работой. Пожалуйста, прочитай внимательно каждое утверждение и реши, чувствуешь ли ты себя таким образом на своей работе. Если у тебя никогда не было такого чувства, выбирай ответ «никогда». Если у тебя было такое чувство, укажи, как часто ты его ощущал(а) в течение последних месяцев.'
+            text = 'Давай оценим твое эмоциональное состояние. Сейчас я покажу тебе 22 утверждения о чувствах и ' \
+                   'переживаниях, связанных с работой. Пожалуйста, прочитай внимательно каждое утверждение и реши, ' \
+                   'чувствуешь ли ты себя таким образом на своей работе. Если у тебя никогда не было такого чувства, ' \
+                   'выбирай ответ «никогда». Если у тебя было такое чувство, укажи, как часто ты его ощущал(а) в ' \
+                   'течение последних месяцев. '
         else:
-            text = 'Давайте оценим ваше эмоциональное состояние. Сейчас я покажу вам 22 утверждения о чувствах и переживаниях, связанных с работой. Пожалуйста, прочитайте внимательно каждое утверждение и решите, чувствуете ли вы себя таким образом на своей работе. Если у вас никогда не было такого чувства, выбирайте ответ «никогда». Если у вас было такое чувство, укажите, как часто вы его ощущали в течение последних месяцев.'
+            text = 'Давайте оценим ваше эмоциональное состояние. Сейчас я покажу вам 22 утверждения о чувствах и ' \
+                   'переживаниях, связанных с работой. Пожалуйста, прочитайте внимательно каждое утверждение и ' \
+                   'решите, чувствуете ли вы себя таким образом на своей работе. Если у вас никогда не было такого ' \
+                   'чувства, выбирайте ответ «никогда». Если у вас было такое чувство, укажите, как часто вы его ' \
+                   'ощущали в течение последних месяцев. '
 
+    await show_typing(message, 3)
     await bot.send_message(
-            message.chat.id,
-            md.text(
-                md.text(text)
-            )
+        message.chat.id,
+        md.text(
+            md.text(text)
         )
+    )
     user_info[message.chat.id]['counter'] = 1
     await bot.send_message(
-            message.chat.id,
+        message.chat.id,
+        md.text(
             md.text(
-                md.text(str(user_info[message.chat.id]['counter']) + '. '+ questions[user_info[message.chat.id]['counter']])
-            ),
-            reply_markup=test_keyboard()
-        )
+                str(user_info[message.chat.id]['counter']) + '. ' + questions[user_info[message.chat.id]['counter']])
+        ),
+        reply_markup=test_keyboard()
+    )
 
     user_info[message.chat.id]['start_time'] = time.time()
 
     await Form.next()
 
+
 @dp.message_handler(lambda message: message.text != "/test", state=Form.test)
 async def wait_start_test(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         text = 'Чтобы начать, нажми /test.' if data['relation'] == "Ты" else 'Чтобы начать, нажмите /test.'
+
+    await show_typing(message)
     await message.answer(text)
+
 
 @dp.message_handler(state=Form.questions_state)
 async def testing(message: types.Message, state: FSMContext):
-
-    user_info[message.chat.id][f"q{user_info[message.chat.id]['counter']}"] = str(int(time.time() - user_info[message.chat.id]['start_time'])) + ' сек'
+    user_info[message.chat.id][f"q{user_info[message.chat.id]['counter']}"] = str(
+        int(time.time() - user_info[message.chat.id]['start_time'])) + ' сек'
 
     if user_info[message.chat.id]['counter'] == 1:
         result[message.chat.id] = {}
         result[message.chat.id][1] = analyze(message)
         result[message.chat.id][2] = 0
         result[message.chat.id][3] = 0
-        if (analyze(message) == -1):
+        if analyze(message) == -1:
             await message.reply("Некорректный ответ.")
             incorrect_answer(1, message)
 
     elif user_info[message.chat.id]['counter'] in [2, 3, 8, 13, 14, 16, 2, 6]:
         if user_info[message.chat.id]['counter'] == 6:
-            result[message.chat.id][1] +=  (6 - analyze(message))
+            result[message.chat.id][1] += (6 - analyze(message))
         else:
             result[message.chat.id][1] += analyze(message)
 
-        if (analyze(message) == -1):
+        if analyze(message) == -1:
             incorrect_answer(1, message)
             await message.reply("Некорректный ответ.")
 
     elif user_info[message.chat.id]['counter'] in [5, 10, 11, 15, 22]:
         result[message.chat.id][2] += analyze(message)
-        if (analyze(message) == -1):
+        if analyze(message) == -1:
             incorrect_answer(2, message)
             await message.reply("Некорректный ответ.")
     else:
         result[message.chat.id][3] += analyze(message)
-        if (analyze(message) == -1):
+        if analyze(message) == -1:
             incorrect_answer(3, message)
             await message.reply("Некорректный ответ.")
 
-
     user_info[message.chat.id]['counter'] += 1
 
-    #debug
+    # debug
     if message.text == 'Continue':
-      user_info[message.chat.id]['counter'] = 23
+        user_info[message.chat.id]['counter'] = 23
 
     if user_info[message.chat.id]['counter'] == 23:
         if result[message.chat.id][1] < 16:
@@ -295,53 +319,56 @@ async def testing(message: types.Message, state: FSMContext):
         else:
             text3 = 'Высокий'
 
-        p = (((result[message.chat.id][1]/54)**2 + (result[message.chat.id][2]/30)**2 + (result[message.chat.id][3]/48)**2 )/3) ** (0.5)
+        p = (((result[message.chat.id][1] / 54) ** 2 + (result[message.chat.id][2] / 30) ** 2 + (
+                result[message.chat.id][3] / 48) ** 2) / 3) ** (0.5)
 
         user_info[message.chat.id]['start_time'] = time.ctime(user_info[message.chat.id]['start_time'])
 
-
+        await show_typing(message)
         await bot.send_message(
-                message.chat.id,
-                md.text(
-                    md.text(user_info[message.chat.id]['name'], ', а вот и результаты'),
-                    md.text('Уровень эмоционального истощения: ', md.bold(text1)),
-                    md.text('Уровень деперсонализации: ', md.bold(text2)),
-                    md.text('Уровень редукции профессионализма: ', md.bold(text3)),
-                    md.text('Общий уровень эмоционального выгорания: ', md.bold(int(p*100), "/ 100")),
-                    sep='\n',
-                ),
-                reply_markup=types.ReplyKeyboardRemove(),
-                parse_mode=ParseMode.MARKDOWN
-            )
+            message.chat.id,
+            md.text(
+                md.text(user_info[message.chat.id]['name'], ', а вот и результаты'),
+                md.text('Уровень эмоционального истощения: ', md.bold(text1)),
+                md.text('Уровень деперсонализации: ', md.bold(text2)),
+                md.text('Уровень редукции профессионализма: ', md.bold(text3)),
+                md.text('Общий уровень эмоционального выгорания: ', md.bold(int(p * 100), "/ 100")),
+                sep='\n',
+            ),
+            reply_markup=types.ReplyKeyboardRemove(),
+            parse_mode=ParseMode.MARKDOWN
+        )
         await state.finish()
 
-
         user_info[message.chat.id]['want_app'] = 'No'
-        await message.answer('Хочешь получить дополнительные материалы, упражнения и помощь экспертов?\n' + md.bold('Скачивай приложение') + ' ⬇',
+        await show_typing(message)
+        await message.answer('Хочешь получить дополнительные материалы, упражнения и помощь экспертов?\n' + md.bold(
+            'Скачивай приложение') + ' ⬇',
                              reply_markup=app_moving_keyboard(),
                              parse_mode=ParseMode.MARKDOWN)
 
         loop = asyncio.get_event_loop()
         loop.create_task(alarm_report(message))
 
-
-
     else:
+        await show_typing(message)
         await bot.send_message(
-                message.chat.id,
-                md.text(
-                    md.text(str(user_info[message.chat.id]['counter']) + '. '+ questions[user_info[message.chat.id]['counter']])
-                ),
-                reply_markup=test_keyboard()
-            )
+            message.chat.id,
+            md.text(
+                md.text(str(user_info[message.chat.id]['counter']) + '. ' + questions[
+                    user_info[message.chat.id]['counter']])
+            ),
+            reply_markup=test_keyboard()
+        )
         user_info[message.chat.id]['start_time'] = time.time()
 
 
 async def alarm_report(message):
-  if user_info[message.chat.id]['want_app'] == 'No':
-    await asyncio.sleep(10)
-    await message.answer(relation_answer("Ты можешь оставить", "Вы можете оставить", message)  + " свой отзыв и получить гайд по эмоциональному выгоранию!", reply_markup=report_keyboard())
-
+    if user_info[message.chat.id]['want_app'] == 'No':
+        await asyncio.sleep(10)
+        await message.answer(relation_answer("Ты можешь оставить", "Вы можете оставить",
+                                             message) + " свой отзыв и получить гайд по эмоциональному выгоранию!",
+                             reply_markup=report_keyboard())
 
 
 def app_moving_keyboard():
@@ -353,6 +380,7 @@ def app_moving_keyboard():
     keyboard.add(*buttons)
     return keyboard
 
+
 def report_keyboard():
     buttons = [
         types.InlineKeyboardButton(text="Оставить отзыв и получить гайд", callback_data="cb_report"),
@@ -361,22 +389,34 @@ def report_keyboard():
     keyboard.add(*buttons)
     return keyboard
 
-@dp.callback_query_handler(text = 'cb_MH_app')
+
+@dp.callback_query_handler(text='cb_MH_app')
 async def callbacks_app_moving(call: types.CallbackQuery):
     user_info[call.message.chat.id]['want_app'] = 'Yes'
-    await call.answer(text="Приложение сейчас в разработке. \nМы обязательно оповестим " + ('тебя' if user_info[call.message.chat.id]['relation'] == 'Ты' else 'вас') + ", когда оно будет готово!",show_alert=True)
+    await call.answer(text="Приложение сейчас в разработке. \nМы обязательно оповестим " + (
+        'тебя' if user_info[call.message.chat.id]['relation'] == 'Ты' else 'вас') + ", когда оно будет готово!",
+                      show_alert=True)
 
-@dp.callback_query_handler(text = 'cb_report')
+
+@dp.callback_query_handler(text='cb_report')
 async def callbacks_report(call: types.CallbackQuery):
     await Report.waiting.set()
-    await call.message.answer(relation_answer("Твое", "Ваше", call.message) + " следующее сообщение будет автоматически считаться отзывом." + relation_answer("Напиши","Напишите", call.message) + " в нем все, что " + relation_answer("тебе","вам",call.message) + " понравилось и не понравилось.")
+    await call.message.answer(relation_answer("Твое", "Ваше",
+                                              call.message) + "следующее сообщение будет автоматически считаться "
+                                                              "отзывом." + relation_answer(
+        "Напиши", "Напишите", call.message) + " в нем все, что " + relation_answer("тебе", "вам",
+                                                                                   call.message) + "понравилось и не "
+                                                                                                   "понравилось.")
     await call.answer()
+
 
 @dp.message_handler(state=Report.waiting)
 async def report_recieve(message: types.Message, state: FSMContext):
     user_info[message.chat.id]['report'] = message.text
-    await message.answer("Спасибо за отзыв!\n"+ relation_answer("Держи", "Держите", message)+ " обещанный гайд" + ' ⬇')
+    await message.answer(
+        "Спасибо за отзыв!\n" + relation_answer("Держи", "Держите", message) + " обещанный гайд" + ' ⬇')
     await state.finish()
+
 
 def relation_answer(str1, str2, message):
     if user_info[message.chat.id]['relation'] == 'Ты':
@@ -388,6 +428,7 @@ def relation_answer(str1, str2, message):
 def incorrect_answer(n, message):
     result[message.chat.id][n] += 1
     user_info[message.chat.id]['counter'] -= 1
+
 
 def analyze(message):
     if message.text == "Никогда":
@@ -408,56 +449,58 @@ def analyze(message):
         return -1
 
 
+async def show_typing(message, wait=1):
+    await bot.send_chat_action(message.chat.id, "typing")
+    time.sleep(wait)
+
+
 questions = {
-1 : 'Я чувствую себя эмоционально опустошенной/ым		',
+    1: 'Я чувствую себя эмоционально опустошенной/ым		',
 
-2 : 'После работы я чувствую себя как «выжатый лимон»',
+    2: 'После работы я чувствую себя как «выжатый лимон»',
 
-3 : 'Утром я чувствую усталость и нежелание идти на работу'	,
+    3: 'Утром я чувствую усталость и нежелание идти на работу',
 
-4 : "Я хорошо понимаю, что чувствуют мои подчиненные и коллеги, и стараюсь учитывать это в интересах дела",
+    4: "Я хорошо понимаю, что чувствуют мои подчиненные и коллеги, и стараюсь учитывать это в интересах дела",
 
-5 : "Я чувствую, что общаюсь с некоторыми подчиненными и коллегами как с предметами (без теплоты и расположения к ним)"	,
+    5: "Я чувствую, что общаюсь с некоторыми подчиненными и коллегами как с предметами (без теплоты и расположения к "
+       "ним)",
 
-6 : "Я чувствую себя энергичной/ым и эмоционально воодушевленной/ым"	,
+    6: "Я чувствую себя энергичной/ым и эмоционально воодушевленной/ым",
 
-7 : "Я умею находить правильное решение в конфликтных ситуациях, возникающих при общении с коллегами"		,
+    7: "Я умею находить правильное решение в конфликтных ситуациях, возникающих при общении с коллегами",
 
-8 : 'Я чувствую угнетенность и апатию		',
+    8: 'Я чувствую угнетенность и апатию		',
 
-9 : 'Я уверен/а, что моя работа нужна людям	'	,
+    9: 'Я уверен/а, что моя работа нужна людям	',
 
-10 : 'В последнее время я стал/а более «черствой» по отношению к тем, с кем работаю	'	,
+    10: 'В последнее время я стал/а более «черствой» по отношению к тем, с кем работаю	',
 
-11 : 'Я замечаю, что моя работа ожесточает меня		',
+    11: 'Я замечаю, что моя работа ожесточает меня		',
 
-12 : 'У меня много планов на будущее, и я верю в их осуществление.		',
+    12: 'У меня много планов на будущее, и я верю в их осуществление.		',
 
-13 : 'Моя работа все больше меня разочаровывает	'	,
+    13: 'Моя работа все больше меня разочаровывает	',
 
-14 : 'Мне кажется, что я слишком много работаю		',
+    14: 'Мне кажется, что я слишком много работаю		',
 
-15 : 'Бывает, что мне действительно безразлично то, что происходит c некоторыми моими подчиненными и коллегами	'	,
+    15: 'Бывает, что мне действительно безразлично то, что происходит c некоторыми моими подчиненными и коллегами	',
 
-16 : 'Мне хочется уединиться и отдохнуть от всего и всех		',
+    16: 'Мне хочется уединиться и отдохнуть от всего и всех		',
 
-17 : 'Я легко могу создать атмосферу доброжелательности и сотрудничества в коллективе		',
+    17: 'Я легко могу создать атмосферу доброжелательности и сотрудничества в коллективе		',
 
-18 : 'Во время работы я чувствую приятное оживление		',
+    18: 'Во время работы я чувствую приятное оживление		',
 
-19 : 'Благодаря своей работе я уже сделал/а в жизни много действительно ценного		',
+    19: 'Благодаря своей работе я уже сделал/а в жизни много действительно ценного		',
 
-20 : 'Я чувствую равнодушие и потерю интереса ко многому, что радовало меня в моей работе		',
+    20: 'Я чувствую равнодушие и потерю интереса ко многому, что радовало меня в моей работе		',
 
-21 : 'На работе я спокойно справляюсь с эмоциональными проблемами		',
+    21: 'На работе я спокойно справляюсь с эмоциональными проблемами		',
 
-22 : 'В последнее время мне кажется, что коллеги и подчиненные все чаще перекладывают на меня груз своих проблем и обязанностей		'
-
+    22: 'В последнее время мне кажется, что коллеги и подчиненные все чаще перекладывают на меня груз своих проблем и '
+        'обязанностей '
 }
-
-
-
-
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
