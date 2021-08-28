@@ -10,14 +10,16 @@ from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import ParseMode
 from aiogram.utils import executor
+from aiogram.types import InputFile
 
 import asyncio
 import time
+import pandas as pd
 
 nest_asyncio.apply()
 logging.basicConfig(level=logging.INFO)
 
-API_TOKEN = '1997577729:AAFCu_AWn4b7QQbvHO2l5rWlphjL-V-7NyY'
+API_TOKEN = ''
 PROXY_URL = 'http://proxy.server:3128'
 
 user_info = {}
@@ -28,7 +30,9 @@ bot = Bot(token=API_TOKEN, proxy=PROXY_URL)
 # For example use simple MemoryStorage for Dispatcher.
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
-HOST_ID = '540276455'
+HOST_ID = ''
+DEL_KEYBOARD = types.ReplyKeyboardRemove()
+list_for_columns = ['id', 'relation', 'username', 'name', 'gender', 'start_time', 'want_app', 'report', 'level_burnout', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13', 'q14', 'q15', 'q16', 'q17', 'q18', 'q19', 'q20', 'q21', 'q22']
 
 
 # States
@@ -36,6 +40,7 @@ class Form(StatesGroup):
     relation = State()
     name = State()  # Will be represented in storage as 'Form:name'
     gender = State()  # Will be represented in storage as 'Form:gender'
+    job = State()
     test = State()
     questions_state = State()
 
@@ -44,20 +49,19 @@ class Report(StatesGroup):
     waiting = State()
 
 class Result(StatesGroup):
-    first_category = State()
     second_category = State()
-    third_category = State()
 
 @dp.message_handler(state='*', commands='debug')
 async def debug(message: types.Message):
     if str(message.from_user.id) == HOST_ID:
         await message.answer("Количество участников: {}".format(len(user_info)))
         for i, chat_id in enumerate(user_info):
-            if i == 5:
+            if i == 6:
                 break
             text = ''
             for inf in user_info[chat_id]:
-                text = text + str(inf) + ' : ' + str(user_info[chat_id][inf]) + '\n'
+                if inf != 'file':
+                    text = text + str(inf) + ' : ' + str(user_info[chat_id][inf]) + '\n'
             await message.answer(text)
             # await message.answer("chat id: {}\nname: {}\nusername: {}\ngender: {}\nfullname: {}".format(chat_id,
             # user_info[chat_id]['name'], user_info[chat_id]['username'], user_info[chat_id]['gender'],
@@ -65,6 +69,10 @@ async def debug(message: types.Message):
     else:
         await message.answer("Incorrect")
 
+@dp.message_handler(state='*', commands='data')
+async def exp_data(message: types.Message):
+    if str(message.from_user.id) == HOST_ID:
+        await message.answer_document(InputFile("user_info.csv"))
 
 @dp.message_handler(commands='start')
 @dp.message_handler(Text(equals='start', ignore_case=True))
@@ -75,7 +83,8 @@ async def cmd_start(message: types.Message):
     # Set state
     await Form.relation.set()
 
-    question = "Привет! Меня зовут ... и я помогу преодолеть тебе психологические проблемы. Чтобы я могла лучше тебе " \
+
+    question = "Привет! Меня зовут Клио и я помогу преодолеть тебе психологические проблемы. Чтобы я могла лучше тебе " \
                "помогать, нам для начала нужно немного познакомиться. Как будет комфортнее на \"ты\" или на \"вы\"?' "
     await show_typing(message)
     await message.answer(question, reply_markup=get_keyboard_relation())
@@ -96,18 +105,30 @@ def get_keyboard_relation():
 
 @dp.message_handler(state=Form.relation)
 async def process_relation(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data['relation'] = message.text
+    if message.text == 'Ты' or message.text == 'Вы':
+        async with state.proxy() as data:
+            data['relation'] = message.text
 
-    user_info[message.chat.id] = {"relation": message.text}
-    user_info[message.chat.id]['id'] = message.from_user.id
-    user_info[message.chat.id]['username'] = message.from_user.username
-    await Form.next()
-    await show_typing(message)
-    if data['relation'] == 'Ты':
-        await message.answer('Как я могу тебя называть?', reply_markup=types.ReplyKeyboardRemove())
+        user_info[message.chat.id] = {"relation": message.text}
+        user_info[message.chat.id]['id'] = str(message.chat.id)
+        user_info[message.chat.id]['username'] = message.from_user.username
+
+        user_info[message.chat.id]['file'] = pd.DataFrame(columns = list_for_columns)
+        user_info[message.chat.id]['file'] = user_info[message.chat.id]['file'].append(pd.DataFrame([[str(message.chat.id)]], columns=['id']), ignore_index=True)
+
+
+        user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'relation'] = message.text
+        user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'username'] = message.from_user.username
+
+
+        await Form.next()
+        await show_typing(message)
+        if data['relation'] == 'Ты':
+            await message.answer('Как я могу тебя называть?', reply_markup=types.ReplyKeyboardRemove())
+        else:
+            await message.answer('Как я могу к вам обращаться?', reply_markup=types.ReplyKeyboardRemove())
     else:
-        await message.answer('Как я могу к вам обращаться?', reply_markup=types.ReplyKeyboardRemove())
+        await message.reply("Ошибка. Выберите вариант ответа, используя кнопки на клавиатуре Ты/Вы.")
 
 
 @dp.message_handler(lambda message: message.text not in ["Ты", "Вы"], state=Form.relation)
@@ -121,6 +142,11 @@ async def process_name(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['name'] = message.text
         user_info[message.chat.id]['name'] = message.text
+
+
+        user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'name'] = message.text
+
+
         if data['relation'] == 'Ты':
             text = 'Какой у тебя пол?'
         else:
@@ -159,34 +185,50 @@ async def process_gender_invalid(message: types.Message):
 
 @dp.message_handler(state=Form.gender)
 async def process_gender(message: types.Message, state: FSMContext):
-    markup = types.ReplyKeyboardRemove()
+
     async with state.proxy() as data:
         data['gender'] = message.text
         user_info[message.chat.id]['gender'] = message.text
+        user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'gender'] = message.text
 
+        if data['relation'] == 'Ты':
+            await message.answer('Какая у тебя профессия?', reply_markup=types.ReplyKeyboardRemove())
+        else:
+            await message.answer('Какая у вас профессия?', reply_markup=types.ReplyKeyboardRemove())
+
+
+    await Form.next()
+
+@dp.message_handler(state=Form.job)
+async def process_job(message: types.Message, state: FSMContext):
+    markup = types.ReplyKeyboardRemove()
+    async with state.proxy() as data:
+        data['gender'] = message.text
+        user_info[message.chat.id]['job'] = message.text
+        user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'job'] = message.text
 
         if data['relation'] == "Ты":
             text = 'Давай оценим твое эмоциональное состояние. Сейчас я покажу тебе 22 утверждения о чувствах и ' \
-                   'переживаниях, связанных с работой. Пожалуйста, прочитай внимательно каждое утверждение и реши, ' \
-                   'чувствуешь ли ты себя таким образом на своей работе. Если у тебя никогда не было такого чувства, ' \
-                   'выбирай ответ «никогда». Если у тебя было такое чувство, укажи, как часто ты его ощущал(а) в ' \
-                   'течение последних месяцев. '
+                       'переживаниях, связанных с работой. Пожалуйста, прочитай внимательно каждое утверждение и реши, ' \
+                       'чувствуешь ли ты себя таким образом на своей работе. Если у тебя никогда не было такого чувства, ' \
+                       'выбирай ответ «никогда». Если у тебя было такое чувство, укажи, как часто ты его ощущал(а) в ' \
+                       'течение последних месяцев. '
         else:
             text = 'Давайте оценим ваше эмоциональное состояние. Сейчас я покажу вам 22 утверждения о чувствах и ' \
-                   'переживаниях, связанных с работой. Пожалуйста, прочитайте внимательно каждое утверждение и ' \
-                   'решите, чувствуете ли вы себя таким образом на своей работе. Если у вас никогда не было такого ' \
-                   'чувства, выбирайте ответ «никогда». Если у вас было такое чувство, укажите, как часто вы его ' \
-                   'ощущали в течение последних месяцев. '
-        # And send message
+                       'переживаниях, связанных с работой. Пожалуйста, прочитайте внимательно каждое утверждение и ' \
+                       'решите, чувствуете ли вы себя таким образом на своей работе. Если у вас никогда не было такого ' \
+                       'чувства, выбирайте ответ «никогда». Если у вас было такое чувство, укажите, как часто вы его ' \
+                       'ощущали в течение последних месяцев. '
+            # And send message
         await bot.send_message(
-            message.chat.id,
-            md.text(
-                md.text('Приятно познакомиться,', md.bold(data['name'])),
-                md.text(text),
-                sep='\n',
-            ),
-            reply_markup=markup,
-            parse_mode=ParseMode.MARKDOWN,
+                message.chat.id,
+                md.text(
+                    md.text('Приятно познакомиться,', md.bold(data['name'])),
+                    md.text(text),
+                    sep='\n',
+                ),
+                reply_markup=markup,
+                parse_mode=ParseMode.MARKDOWN,
         )
 
         time.sleep(3)
@@ -197,7 +239,6 @@ async def process_gender(message: types.Message, state: FSMContext):
                     md.text(text)
                 )
             )
-
     await Form.next()
 
 
@@ -243,6 +284,9 @@ async def testing(message: types.Message, state: FSMContext):
 
     user_info[message.chat.id][f"q{user_info[message.chat.id]['counter']}"] = str(int(time.time() - user_info[message.chat.id]['start_time'])) + ' сек'
 
+    user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], f"q{user_info[message.chat.id]['counter']}"] = str(int(time.time() - user_info[message.chat.id]['start_time'])) + ' сек'
+
+
     if user_info[message.chat.id]['counter'] == 1:
         result[message.chat.id] = {}
         result[message.chat.id][1] = analyze(message)
@@ -277,7 +321,7 @@ async def testing(message: types.Message, state: FSMContext):
     user_info[message.chat.id]['counter'] += 1
 
     #debug
-    if message.text == 'Continue':
+    if message.text == 'Continue' and str(message.from_user.id) == HOST_ID:
       user_info[message.chat.id]['counter'] = 23
 
     if user_info[message.chat.id]['counter'] == 23:
@@ -305,7 +349,10 @@ async def testing(message: types.Message, state: FSMContext):
         p = (((result[message.chat.id][1]/54)**2 + (result[message.chat.id][2]/30)**2 + (result[message.chat.id][3]/48)**2 )/3) ** (0.5)
 
         user_info[message.chat.id]['start_time'] = time.ctime(user_info[message.chat.id]['start_time'])
+        user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'start_time'] = user_info[message.chat.id]['start_time']
 
+        user_info[message.chat.id]['level_burnout'] = str(int(p*100))
+        user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'level_burnout'] = str(int(p*100))
 
         await bot.send_message(
                 message.chat.id,
@@ -322,24 +369,24 @@ async def testing(message: types.Message, state: FSMContext):
             )
         await state.finish()
 
-        time.sleep(3)
+        time.sleep(5)
 
 
         if int(p*100) < 46:
-            await message.answer(relation_answer("У тебя низкий уровень выгорания, поэтому специальная помощь тебе не нужна. "\
+            await message.answer(relation_answer("У тебя низкий уровень выгорания("+ str(int(p*100)) + "/100), поэтому специальная помощь тебе не нужна. "\
                                                 "Но ты можешь узнать себя лучше, для этого ниже будут три вопроса для самопознания. Можешь задавать их себе "\
                                                 "каждый день перед сном или вставить в рабочий планер. Они помогут тебе осознать свои мысли, эмоции, а также "\
-                                                "понять ценность себя.", "У вас низкий уровень выгорания, поэтому специальная помощь вам не нужна. Но вы можете "\
+                                                "понять ценность себя.", "У вас низкий уровень выгорания("+ str(int(p*100)) + "/100), поэтому специальная помощь вам не нужна. Но вы можете "\
                                                 "познакомиться с собой ближе, для этого ниже будут три вопроса для самопознания. Можете задавать их себе каждый "\
                                                 "день перед сном или вставить в рабочий планер. Они помогут осознать свои мысли, эмоции, а также понять ценность себя.",message))
             await show_typing(message, 2)
-            await message.answer("О чем я сегодня думал?\nЧто я сегодня чувствовал?\nЗа что могу поблагодарить себя?")
+            await message.answer("1) О чем я сегодня думал?\n2) Что я сегодня чувствовал?\n3) За что могу поблагодарить себя?")
             time.sleep(5)
             await suggest_app(message)
         elif int(p*100) < 66:
-            await message.answer(relation_answer("У тебя средний уровень выгорания. Не бойся, ничего страшного не происходит, "\
+            await message.answer(relation_answer("У тебя средний уровень выгорания("+ str(int(p*100)) + "/100). Не бойся, ничего страшного не происходит, "\
             "но стоит обратить внимание на свои эмоции. Давай потренируемся вместе.\nНиже будут даны 3 пары эмоций. Тебе нужно "\
-            "в каждой паре выбрать самую сильную эмоцию.", "У вас средний уровень выгорания. Не бойтесь, ничего страшного не "\
+            "в каждой паре выбрать самую сильную эмоцию.", "У вас средний уровень выгорания("+ str(int(p*100)) + "/100). Не бойтесь, ничего страшного не "\
             "происходит, но стоит обратить внимание на свои эмоции. Давайте потренируемся вместе. Ниже будут даны 3 пары эмоций. "\
             "Вам нужно в каждой паре выбрать самую сильную эмоцию.", message))
             await show_typing(message, 2)
@@ -350,9 +397,9 @@ async def testing(message: types.Message, state: FSMContext):
             await Result.second_category.set()
         else:
 
-            await message.answer(relation_answer("У тебя высокий уровень выгорания. Не бойся, мы тебе поможем!" \
+            await message.answer(relation_answer("У тебя высокий уровень выгорания("+ str(int(p*100)) + "/100). Не бойся, мы тебе поможем! " \
                                                 "Ниже ты сможешь найти технику релаксации и контакты проверенного психолога",
-                                                "У вас высокий уровень выгорания. Не переживайте, мы поможем! " \
+                                                "У вас высокий уровень выгорания("+ str(int(p*100)) + "/100). Не переживайте, мы поможем! " \
                                                 "Ниже вы сможете найти технику релаксации, контакты проверенного психолога и гайд.",
                                                 message))
 
@@ -373,10 +420,20 @@ async def testing(message: types.Message, state: FSMContext):
             await show_typing(message, 4)
 
 
-            await message.answer("Привет! Я Лера. \nЯ немного расскажу о себе: окончила факультет психологии МГПУ, "\
-                                "провела более 100 часов индивидуальной терапии. Еще во время обучения начала проходить "\
-                                "личную терапию, а сейчас у меня есть супервизор. Я могу помочь тебе справиться с этим состоянием, "\
-                                "напиши мне в телеграм, чтобы узнать подробнее.\nНаписать Лере - @ValeriaGorsh")
+
+
+
+            text = "Привет! Я Лера. \nЯ немного расскажу о себе: окончила факультет психологии МГПУ, "\
+                                 "провела более 100 часов индивидуальной терапии. Еще во время обучения начала проходить "\
+                                 "личную терапию, а сейчас у меня есть супервизор. Я могу помочь тебе справиться с этим состоянием, "\
+                                 "напиши мне в телеграм, чтобы узнать подробнее.\nНаписать Лере - @ValeriaGorsh"
+
+            # await message.answer("Привет! Я Лера. \nЯ немного расскажу о себе: окончила факультет психологии МГПУ, "\
+            #                     "провела более 100 часов индивидуальной терапии. Еще во время обучения начала проходить "\
+            #                     "личную терапию, а сейчас у меня есть супервизор. Я могу помочь тебе справиться с этим состоянием, "\
+            #                     "напиши мне в телеграм, чтобы узнать подробнее.\nНаписать Лере - @ValeriaGorsh", )
+            with open('photo_2021-08-26_13-11-39.jpg', 'rb') as photo:
+                await message.answer_photo(photo, caption=text)
 
             time.sleep(5)
             await suggest_app(message)
@@ -394,15 +451,16 @@ async def testing(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Result.second_category)
 async def second_category_help(message: types.Message, state: FSMContext):
+
     if message.text == "Злость":
-        await message.answer("Не совсем верно, ведь ярость это более сильная эмоция за счет потери контроля, в этом состоянии мы находимся в афекте")
+        await message.answer("Не совсем верно, ведь ярость это более сильная эмоция за счет потери контроля, в этом состоянии мы находимся в афекте", reply_markup=DEL_KEYBOARD)
         await show_typing(message, 2)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
         markup.add("Тревога")
         markup.add("Опасение")
         await message.answer("Какая эмоция сильнее:\nтревога или опасение?", reply_markup = markup)
     elif message.text == "Ярость":
-        await message.answer("Верно! Злость мы можем контролировать и можем подавить при желании")
+        await message.answer("Верно! Злость мы можем контролировать и можем подавить при желании",reply_markup=DEL_KEYBOARD)
         await show_typing(message, 2)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
         markup.add("Тревога")
@@ -410,14 +468,14 @@ async def second_category_help(message: types.Message, state: FSMContext):
         await message.answer("Какая эмоция сильнее:\nтревога или опасение?", reply_markup = markup)
 
     elif message.text == "Тревога":
-        await message.answer("Верно. Тревога сильная эмоция из-за того что мы не можем осознать ее причины")
+        await message.answer("Верно. Тревога сильная эмоция из-за того что мы не можем осознать ее причины",reply_markup=DEL_KEYBOARD)
         await show_typing(message, 2)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
         markup.add("Счастье")
         markup.add("Восторг")
         await message.answer("Какая эмоция сильнее:\nсчастье или восторг?", reply_markup = markup)
     elif message.text == "Опасение":
-        await message.answer("Не совсем. Опасения всегда предметны. Они возникают у нас из-за различных ситуаций и очень осознаются нами")
+        await message.answer("Не совсем. Опасения всегда предметны. Они возникают у нас из-за различных ситуаций и очень осознаются нами",reply_markup=DEL_KEYBOARD)
         await show_typing(message, 2)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
         markup.add("Счастье")
@@ -425,26 +483,37 @@ async def second_category_help(message: types.Message, state: FSMContext):
         await message.answer("Какая эмоция сильнее:\nсчастье или восторг?", reply_markup = markup)
 
     elif message.text == "Счастье":
-        await message.answer("Это здорово, что ты так понимаешь свои чувства")
+        await message.answer("Это здорово, что ты так понимаешь свои чувства",reply_markup=DEL_KEYBOARD)
+        await state.finish()
         time.sleep(3)
         await suggest_app(message)
 
+
     elif message.text == "Восторг":
-        await message.answer("Счастье - более долговременная и сильная эмоция")
+        await message.answer("Счастье - более долговременная и сильная эмоция",reply_markup=DEL_KEYBOARD)
+        await state.finish()
         time.sleep(3)
         await suggest_app(message)
+
 
 
 async def suggest_app(message):
     user_info[message.chat.id]['want_app'] = 'No'
+    user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'want_app'] = 'No'
     await message.answer('Хочешь получить дополнительные материалы, упражнения и помощь экспертов?\n' + md.bold('Скачивай приложение') + ' ⬇',
                             reply_markup=app_moving_keyboard(),
                             parse_mode=ParseMode.MARKDOWN)
-
+    time.sleep(1)
     loop = asyncio.get_event_loop()
     loop.create_task(alarm_report(message))
+    loop.create_task(export_data(message))
 
 
+async def export_data(message):
+    await asyncio.sleep(120)
+    df = pd.read_csv('user_info.csv')
+    df = df.append(user_info[message.chat.id]['file'], ignore_index=True)
+    df.to_csv('user_info.csv', index=False)
 
 async def alarm_report(message):
 
@@ -452,6 +521,8 @@ async def alarm_report(message):
     await message.answer(relation_answer("Ты можешь оставить", "Вы можете оставить",
                                              message) + " свой отзыв и получить гайд по эмоциональному выгоранию!",
                              reply_markup=report_keyboard())
+
+
 
 
 def app_moving_keyboard():
@@ -475,10 +546,13 @@ def report_keyboard():
 
 @dp.callback_query_handler(text='cb_MH_app')
 async def callbacks_app_moving(call: types.CallbackQuery):
-    user_info[call.message.chat.id]['want_app'] = 'Yes'
-    await call.answer(text="Приложение сейчас в разработке. \nМы обязательно оповестим " + (
-        'тебя' if user_info[call.message.chat.id]['relation'] == 'Ты' else 'вас') + ", когда оно будет готово!",
-                      show_alert=True)
+    if user_info.get(call.message.chat.id) != None:
+        if user_info[call.message.chat.id].get('want_app') != None:
+            user_info[call.message.chat.id]['want_app'] = 'Yes'
+            user_info[call.message.chat.id]['file'].at[user_info[call.message.chat.id]['file'].loc[user_info[call.message.chat.id]['file']['id']==str(call.message.chat.id)].index[0], 'want_app'] = 'Yes'
+            await call.answer(text="Приложение сейчас в разработке. \nМы обязательно оповестим " + (
+                    'тебя' if user_info[call.message.chat.id]['relation'] == 'Ты' else 'вас') + ", когда оно будет готово!",
+                                  show_alert=True)
 
 
 
@@ -486,10 +560,10 @@ async def callbacks_app_moving(call: types.CallbackQuery):
 async def callbacks_report(call: types.CallbackQuery):
     await Report.waiting.set()
     await call.message.answer(relation_answer("Твое", "Ваше",
-                                              call.message) + "следующее сообщение будет автоматически считаться "
-                                                              "отзывом." + relation_answer(
+                                              call.message) + " следующее сообщение будет автоматически считаться "
+                                                              "отзывом. " + relation_answer(
         "Напиши", "Напишите", call.message) + " в нем все, что " + relation_answer("тебе", "вам",
-                                                                                   call.message) + "понравилось и не "
+                                                                                   call.message) + " понравилось и не "
                                                                                                    "понравилось.")
     await call.answer()
 
@@ -497,8 +571,13 @@ async def callbacks_report(call: types.CallbackQuery):
 @dp.message_handler(state=Report.waiting)
 async def report_recieve(message: types.Message, state: FSMContext):
     user_info[message.chat.id]['report'] = message.text
+    user_info[message.chat.id]['file'].at[user_info[message.chat.id]['file'].loc[user_info[message.chat.id]['file']['id']==str(message.chat.id)].index[0], 'report'] = message.text
+
     await message.answer(
         "Спасибо за отзыв!\n" + relation_answer("Держи", "Держите", message) + " обещанный гайд" + ' ⬇')
+
+
+    await message.answer_document(InputFile("Гайд.pdf"))
     await state.finish()
 
 
@@ -558,7 +637,7 @@ questions = {
 
     9: 'Я уверен/а, что моя работа нужна людям	',
 
-    10: 'В последнее время я стал/а более «черствой» по отношению к тем, с кем работаю	',
+    10: 'В последнее время я чувствую свою чёрствость по отношению к тем, с кем работаю	',
 
     11: 'Я замечаю, что моя работа ожесточает меня		',
 
